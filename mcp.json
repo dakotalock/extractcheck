@@ -1,0 +1,33 @@
+{
+  "name": "extractcheck",
+  "version": "0.1.0",
+  "description": "Lie detector for agent scrapes. Verify a claimed JSON extract against a live public page and return a signed receipt.",
+  "tools": [
+    {
+      "name": "check_extract",
+      "description": "Refetch a public URL, extract independently, compare to the claimed JSON, return pass/fail plus a signed receipt. $0.03 if the body is non-empty; $0 if fetch fails or body is empty.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) page to verify"
+          },
+          "claim": {
+            "type": "object",
+            "description": "Claimed extract fields (only these keys are compared)"
+          },
+          "schema": {
+            "type": "object",
+            "description": "Optional JSON Schema for the claim"
+          }
+        },
+        "required": ["url", "claim"]
+      }
+    }
+  ],
+  "entrypoint": {
+    "command": "python",
+    "args": ["-m", "extractcheck.mcp_server"]
+  }
+}

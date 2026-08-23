@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: extractcheck
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: EXTRACTCHECK_API_KEY
+        generateValue: true
+      - key: EXTRACTCHECK_SECRET
+        generateValue: true
+      - key: PYTHONPATH
+        value: /app
