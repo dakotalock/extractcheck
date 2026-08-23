@@ -46,36 +46,36 @@ def hmac_ok(given: str, expected: str) -> bool:
     return _hmac.compare_digest(given, expected)
 
 
-LANDING = f"""<!doctype html>
+LANDING = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>ExtractCheck — scrape lie detector</title>
   <style>
-    :root {{ color-scheme: dark; }}
-    body {{ margin: 0; font: 16px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-           background: #0b0d10; color: #e8edf2; }}
-    main {{ max-width: 720px; margin: 12vh auto; padding: 0 24px; }}
-    h1 {{ font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }}
-    p {{ color: #c3ccd6; }}
-    code, pre {{ background: #151a21; border: 1px solid #2a3340; border-radius: 8px; }}
-    code {{ padding: 2px 6px; }}
-    pre {{ padding: 14px 16px; overflow-x: auto; color: #d7e3ef; }}
-    .price {{ color: #9be59b; }}
-    a {{ color: #8ec8ff; }}
-    footer {{ margin-top: 2.5rem; color: #7d8896; font-size: 13px; }}
+    :root { color-scheme: dark; }
+    body { margin: 0; font: 16px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+           background: #0b0d10; color: #e8edf2; }
+    main { max-width: 720px; margin: 12vh auto; padding: 0 24px; }
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+    p { color: #c3ccd6; }
+    code, pre { background: #151a21; border: 1px solid #2a3340; border-radius: 8px; }
+    code { padding: 2px 6px; }
+    pre { padding: 14px 16px; overflow-x: auto; color: #d7e3ef; }
+    .price { color: #9be59b; }
+    a { color: #8ec8ff; }
+    footer { margin-top: 2.5rem; color: #7d8896; font-size: 13px; }
   </style>
 </head>
 <body>
 <main>
   <h1>ExtractCheck</h1>
   <p>We refetch the page, extract independently, and tell you if an agent's claimed JSON is a lie. Signed receipt included.</p>
-  <pre>curl -sS http://127.0.0.1:8787/v1/check \\
-  -H 'X-API-Key: dev-key' -H 'Content-Type: application/json' \\
-  -d '{{{"url":"http://books.toscrape.com/","claim":{{"title":"All products | Books to Scrape - Sandbox","price_text":"£51.77"}}}}'</pre>
-  <p class="price">${CHARGE_USD:.2f} per successful non-empty fetch. $0.00 if we cannot fetch or the body is empty.</p>
-  <p><a href="/docs">OpenAPI</a> · <a href="/health">health</a> · MCP tool <code>check_extract</code></p>
+  <pre>curl -sS https://extractcheck.onrender.com/v1/check \\
+  -H 'X-API-Key: YOUR_KEY' -H 'Content-Type: application/json' \\
+  -d '{\"url\":\"http://books.toscrape.com/\",\"claim\":{\"title\":\"All products | Books to Scrape - Sandbox\",\"price_text\":\"£51.77\"}}'</pre>
+  <p class=\"price\">$0.03 per successful non-empty fetch. $0.00 if we cannot fetch or the body is empty.</p>
+  <p><a href=\"/docs\">OpenAPI</a> · <a href=\"/health\">health</a> · <a href=\"/v1/billing\">billing</a> · MCP tool <code>check_extract</code></p>
   <footer>Not a crawler. No logins. No captcha farms. Voidly sells scrape hashes; we sell extract verification.</footer>
 </main>
 </body>
