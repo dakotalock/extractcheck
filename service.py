@@ -3,10 +3,21 @@ from __future__ import annotations
 from typing import Any
 
 from extractcheck import CHARGE_USD
+from extractcheck.billing import report_usage
 from extractcheck.compare import compare_claim, validate_schema
 from extractcheck.extract import extract_from_bytes
 from extractcheck.fetch import fetch_url, utc_now
 from extractcheck.receipts import new_id, sign, store
+
+
+def _finalize(result: dict[str, Any]) -> dict[str, Any]:
+    if result.get("charged"):
+        result.update(report_usage(result["receipt_id"], 1))
+    else:
+        result["stripe_reported"] = False
+    result["signature"] = sign(result)
+    store(result)
+    return result
 
 
 def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -30,9 +41,7 @@ def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = N
         }
         if schema_error:
             result["error"] = f"{result['error']}; {schema_error}"
-        result["signature"] = sign(result)
-        store(result)
-        return result
+        return _finalize(result)
 
     extract = extract_from_bytes(fetched["raw"], fetched.get("content_type") or "text/html")
     verdict = compare_claim(claim, extract)
@@ -53,6 +62,4 @@ def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = N
         result["diffs"] = list(result["diffs"]) + [
             {"path": "$schema", "claimed": schema, "found": None}
         ]
-    result["signature"] = sign(result)
-    store(result)
-    return result
+    return _finalize(result)

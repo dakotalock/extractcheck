@@ -37,7 +37,10 @@ GET `/health` · GET `/docs` · GET `/v1/openapi.json` · GET `/v1/receipts/{id}
 
 - **$0.03** when we fetch a non-empty body (`charge: 0.03`, `charged: true`).
 - **$0.00** when we cannot fetch or the body is empty (`charged: false`). That is the refund rule: no fetch, no charge.
-- No Stripe in v0. Meter locally from `data/receipts.jsonl`.
+- Stripe test-mode meter `extractcheck_check` at **$0.03** per `charged: true` check.
+- Set `STRIPE_SECRET_KEY`, `STRIPE_CUSTOMER_ID`, and optional `STRIPE_METER_EVENT` (default `extractcheck_check`).
+- If Stripe is unset or errors, the check still returns; `stripe_reported` is false.
+- GET `/v1/billing` shows whether Stripe is configured (no secrets).
 
 ## MCP
 
@@ -65,7 +68,7 @@ One tool: `check_extract(url, claim, schema?)`.
 - Browser logins or session cookies
 - CAPTCHA farms or paywall bypass
 - Generic crawl / sitemap walks
-- Memory, ads, or Stripe
+- Memory or ads
 - Attacking sites
 
 Fetches use `User-Agent: ExtractCheck/0.1`, a 12s timeout, and a 2MB body cap.

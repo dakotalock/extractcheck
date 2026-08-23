@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from extractcheck import CHARGE_USD, __version__
+from extractcheck.billing import configured, meter_event_name
 from extractcheck.receipts import load, verify
 from extractcheck.service import run_check
 
@@ -72,7 +73,7 @@ LANDING = f"""<!doctype html>
   <p>We refetch the page, extract independently, and tell you if an agent's claimed JSON is a lie. Signed receipt included.</p>
   <pre>curl -sS http://127.0.0.1:8787/v1/check \\
   -H 'X-API-Key: dev-key' -H 'Content-Type: application/json' \\
-  -d '{{"url":"http://books.toscrape.com/","claim":{{"title":"All products | Books to Scrape - Sandbox","price_text":"£51.77"}}}}'</pre>
+  -d '{{{"url":"http://books.toscrape.com/","claim":{{"title":"All products | Books to Scrape - Sandbox","price_text":"£51.77"}}}}'</pre>
   <p class="price">${CHARGE_USD:.2f} per successful non-empty fetch. $0.00 if we cannot fetch or the body is empty.</p>
   <p><a href="/docs">OpenAPI</a> · <a href="/health">health</a> · MCP tool <code>check_extract</code></p>
   <footer>Not a crawler. No logins. No captcha farms. Voidly sells scrape hashes; we sell extract verification.</footer>
@@ -90,6 +91,11 @@ def landing() -> str:
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"ok": True, "service": "extractcheck", "version": __version__}
+
+
+@app.get("/v1/billing")
+def billing() -> dict[str, Any]:
+    return {"ok": True, "meter": meter_event_name(), "configured": configured()}
 
 
 @app.post("/v1/check")
