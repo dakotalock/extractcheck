@@ -10,10 +10,32 @@ from pydantic import BaseModel, Field
 from extractcheck import __version__
 from extractcheck.billing import configured, meter_event_name, price_id
 from extractcheck.checkout import create_checkout_session, customer_for_paid_key, issue_key_for_session
-from extractcheck.receipts import load, verify
+from extractcheck.extract import SUPPORTED_FIELDS
+from extractcheck.receipts import load, pubkey_ed25519, verify
 from extractcheck.service import run_check
 
 DEFAULT_API_KEY = "dev-key"
+
+def _require_prod_secrets() -> None:
+    if os.environ.get("EXTRACTCHECK_ALLOW_DEV") == "1":
+        return
+    api_key = os.environ.get("EXTRACTCHECK_API_KEY")
+    secret = os.environ.get("EXTRACTCHECK_SECRET")
+    seed = os.environ.get("EXTRACTCHECK_ED25519_SEED") or ""
+    if not api_key or api_key == DEFAULT_API_KEY:
+        raise RuntimeError("EXTRACTCHECK_API_KEY must be set to a non-dev value")
+    if not secret or secret == "dev-secret":
+        raise RuntimeError("EXTRACTCHECK_SECRET must be set to a non-dev value")
+    if len(seed) != 64:
+        raise RuntimeError("EXTRACTCHECK_ED25519_SEED must be 64 hex characters")
+    try:
+        bytes.fromhex(seed)
+    except ValueError as exc:
+        raise RuntimeError("EXTRACTCHECK_ED25519_SEED must be 64 hex characters") from exc
+
+
+_require_prod_secrets()
+
 
 app = FastAPI(
     title="ExtractCheck",
@@ -127,7 +149,13 @@ def billing() -> dict[str, Any]:
         "meter": meter_event_name(),
         "configured": configured(),
         "checkout": bool(price_id()),
+        "pubkey_ed25519": pubkey_ed25519(),
     }
+
+
+@app.get("/v1/fields")
+def fields() -> dict[str, Any]:
+    return {"fields": list(SUPPORTED_FIELDS)}
 
 
 @app.get("/v1/checkout")

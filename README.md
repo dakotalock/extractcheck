@@ -4,6 +4,8 @@ A lie detector for agent scrapes. The caller sends a URL plus a claimed JSON ext
 
 We do **not** sell crawling. Voidly sells signed scrape hashes. We sell extract verification.
 
+We only verify these fields: `kind`, `title`, `h1`, `description`, `canonical`, `og:title`, `og:description`, `name`, `price`, `currency`, `price_text`; extra claim keys fail because we did not extract them.
+
 ## Run
 
 ```bash
@@ -31,7 +33,7 @@ curl -sS http://127.0.0.1:8787/v1/check \
 
 Auth: `X-API-Key` must match `EXTRACTCHECK_API_KEY` (default `dev-key`).
 
-GET `/health` · GET `/docs` · GET `/v1/openapi.json` · GET `/v1/receipts/{id}`
+GET `/health` · GET `/docs` · GET `/v1/openapi.json` · GET `/v1/fields` · GET `/v1/receipts/{id}`
 
 ## Pricing and refunds
 
@@ -82,4 +84,4 @@ PYTHONPATH=/workspace python -m extractcheck.bakeoff_hard
 
 ## Receipts
 
-HMAC-SHA256 over canonical JSON (keys sorted, no `signature` field) using `EXTRACTCHECK_SECRET` (default `dev-secret`). Stored at `extractcheck/data/receipts.jsonl`.
+HMAC-SHA256 and Ed25519 over the same canonical JSON (keys sorted, no `signature`/`ed25519` fields). HMAC uses `EXTRACTCHECK_SECRET` (default `dev-secret`). Ed25519 uses `EXTRACTCHECK_ED25519_SEED` (64 hex chars); `pubkey_ed25519` is on the receipt and GET `/v1/billing`. Stored at `extractcheck/data/receipts.jsonl`.

@@ -8,6 +8,20 @@ from bs4 import BeautifulSoup, Tag
 
 from extractcheck.normalize import collapse
 
+SUPPORTED_FIELDS = (
+    "kind",
+    "title",
+    "h1",
+    "description",
+    "canonical",
+    "og:title",
+    "og:description",
+    "name",
+    "price",
+    "currency",
+    "price_text",
+)
+
 PRICE_RE = re.compile(
     r"(?:(?<![A-Za-z])(?:USD|EUR|GBP|CAD|AUD|JPY)\s*)?"
     r"(?:₹|€|£|\$)\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?"

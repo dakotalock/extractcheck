@@ -38,3 +38,20 @@ def test_secret_override(monkeypatch):
     sig = r.sign(payload)
     assert r.verify({**payload, "signature": sig}) is True
     assert r.verify({**payload, "signature": sig}, key="dev-secret") is False
+
+
+def test_ed25519_roundtrip_and_either_verify():
+    from extractcheck.receipts import attach_signatures, verify
+
+    payload = {"pass": True, "receipt_id": "rcpt_ed", "charge": 0.03}
+    attach_signatures(payload)
+    assert payload.get("ed25519")
+    assert payload.get("pubkey_ed25519")
+    assert len(payload["pubkey_ed25519"]) == 64
+    assert verify(payload) is True
+    hmac_only = dict(payload)
+    hmac_only.pop("ed25519")
+    assert verify(hmac_only) is True
+    ed_only = dict(payload)
+    ed_only["signature"] = "0" * 64
+    assert verify(ed_only) is True
