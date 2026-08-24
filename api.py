@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from extractcheck import CHARGE_USD, __version__
-from extractcheck.billing import configured, meter_event_name
+from extractcheck import __version__
+from extractcheck.billing import configured, meter_event_name, price_id
+from extractcheck.checkout import create_checkout_session, customer_for_paid_key, issue_key_for_session
 from extractcheck.receipts import load, verify
 from extractcheck.service import run_check
 
@@ -31,19 +32,26 @@ class CheckBody(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _api_key() -> str:
+def _operator_key() -> str:
     return os.environ.get("EXTRACTCHECK_API_KEY", DEFAULT_API_KEY)
-
-
-def _require_key(x_api_key: str | None) -> None:
-    if not x_api_key or not hmac_ok(x_api_key, _api_key()):
-        raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
 
 
 def hmac_ok(given: str, expected: str) -> bool:
     import hmac as _hmac
 
     return _hmac.compare_digest(given, expected)
+
+
+def resolve_caller(x_api_key: str | None) -> str | None:
+    """Return Stripe customer id to bill, or None for the operator key (env customer)."""
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
+    if hmac_ok(x_api_key, _operator_key()):
+        return os.environ.get("STRIPE_CUSTOMER_ID")
+    customer_id = customer_for_paid_key(x_api_key)
+    if not customer_id:
+        raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
+    return customer_id
 
 
 LANDING = """<!doctype html>
@@ -73,13 +81,32 @@ LANDING = """<!doctype html>
   <p>We refetch the page, extract independently, and tell you if an agent's claimed JSON is a lie. Signed receipt included.</p>
   <pre>curl -sS https://extractcheck.onrender.com/v1/check \\
   -H 'X-API-Key: YOUR_KEY' -H 'Content-Type: application/json' \\
-  -d '{\"url\":\"http://books.toscrape.com/\",\"claim\":{\"title\":\"All products | Books to Scrape - Sandbox\",\"price_text\":\"£51.77\"}}'</pre>
-  <p class=\"price\">$0.03 per successful non-empty fetch. $0.00 if we cannot fetch or the body is empty.</p>
-  <p><a href=\"/docs\">OpenAPI</a> · <a href=\"/health\">health</a> · <a href=\"/v1/billing\">billing</a> · MCP tool <code>check_extract</code></p>
-  <footer>Not a crawler. No logins. No captcha farms. Voidly sells scrape hashes; we sell extract verification.</footer>
+  -d '{"url":"http://books.toscrape.com/","claim":{"title":"All products | Books to Scrape - Sandbox","price_text":"£51.77"}}'</pre>
+  <p class="price">$0.03 per successful non-empty fetch. $0.00 if we cannot fetch or the body is empty. Card required.</p>
+  <p><a href="/v1/checkout">Subscribe with a card</a> · <a href="/docs">OpenAPI</a> · <a href="/health">health</a></p>
+  <footer>Not a crawler. No logins. No captcha farms.</footer>
 </main>
 </body>
 </html>
+"""
+
+
+SUCCESS_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>ExtractCheck key</title>
+<style>
+:root { color-scheme: dark; }
+body { margin: 0; font: 16px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+       background: #0b0d10; color: #e8edf2; }
+main { max-width: 720px; margin: 12vh auto; padding: 0 24px; }
+code, pre { background: #151a21; border: 1px solid #2a3340; border-radius: 8px; padding: 14px 16px; display: block; overflow-x: auto; }
+p { color: #c3ccd6; } a { color: #8ec8ff; }
+</style></head><body><main>
+<h1>ExtractCheck</h1>
+<p>{message}</p>
+{key_block}
+<p>Header: <code>X-API-Key</code>. $0.03 per successful fetch, billed to the card on this subscription.</p>
+<p><a href="/">Home</a></p>
+</main></body></html>
 """
 
 
@@ -95,23 +122,56 @@ def health() -> dict[str, Any]:
 
 @app.get("/v1/billing")
 def billing() -> dict[str, Any]:
-    return {"ok": True, "meter": meter_event_name(), "configured": configured()}
+    return {
+        "ok": True,
+        "meter": meter_event_name(),
+        "configured": configured(),
+        "checkout": bool(price_id()),
+    }
+
+
+@app.get("/v1/checkout")
+def checkout_redirect():
+    got = create_checkout_session()
+    if not got.get("ok"):
+        raise HTTPException(status_code=503, detail=got.get("error") or "checkout failed")
+    return RedirectResponse(got["url"], status_code=303)
+
+
+@app.post("/v1/checkout")
+def checkout_json() -> dict[str, Any]:
+    got = create_checkout_session()
+    if not got.get("ok"):
+        raise HTTPException(status_code=503, detail=got.get("error") or "checkout failed")
+    return {"url": got["url"]}
+
+
+@app.get("/v1/checkout/success", response_class=HTMLResponse)
+def checkout_success(session_id: str = Query(default="")) -> str:
+    if not session_id:
+        raise HTTPException(status_code=400, detail="missing session_id")
+    got = issue_key_for_session(session_id)
+    if not got.get("ok"):
+        raise HTTPException(status_code=400, detail=got.get("error") or "could not issue key")
+    key = got.get("api_key")
+    key_block = f"<pre>{key}</pre>" if key else "<p>No key in this response.</p>"
+    return SUCCESS_PAGE.replace("{message}", got.get("message") or "").replace("{key_block}", key_block)
 
 
 @app.post("/v1/check")
 def check(body: CheckBody, x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> JSONResponse:
-    _require_key(x_api_key)
+    bill_to = resolve_caller(x_api_key)
     if not body.url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="url must be http(s)")
     if not isinstance(body.claim, dict) or not body.claim:
         raise HTTPException(status_code=400, detail="claim must be a non-empty object")
-    result = run_check(body.url, body.claim, body.schema_obj)
+    result = run_check(body.url, body.claim, body.schema_obj, bill_to=bill_to)
     return JSONResponse(result)
 
 
 @app.get("/v1/receipts/{receipt_id}")
 def get_receipt(receipt_id: str, x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> dict[str, Any]:
-    _require_key(x_api_key)
+    resolve_caller(x_api_key)
     row = load(receipt_id)
     if not row:
         raise HTTPException(status_code=404, detail="receipt not found")

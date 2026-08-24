@@ -10,9 +10,9 @@ from extractcheck.fetch import fetch_url, utc_now
 from extractcheck.receipts import new_id, sign, store
 
 
-def _finalize(result: dict[str, Any]) -> dict[str, Any]:
+def _finalize(result: dict[str, Any], bill_to: str | None) -> dict[str, Any]:
     if result.get("charged"):
-        result.update(report_usage(result["receipt_id"], 1))
+        result.update(report_usage(result["receipt_id"], customer_id=bill_to, units=1))
     else:
         result["stripe_reported"] = False
     result["signature"] = sign(result)
@@ -20,7 +20,12 @@ def _finalize(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = None) -> dict[str, Any]:
+def run_check(
+    url: str,
+    claim: dict[str, Any],
+    schema: dict[str, Any] | None = None,
+    bill_to: str | None = None,
+) -> dict[str, Any]:
     schema_error = validate_schema(claim, schema)
     fetched = fetch_url(url)
     fetched_at = fetched.get("fetched_at") or utc_now()
@@ -41,7 +46,7 @@ def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = N
         }
         if schema_error:
             result["error"] = f"{result['error']}; {schema_error}"
-        return _finalize(result)
+        return _finalize(result, bill_to)
 
     extract = extract_from_bytes(fetched["raw"], fetched.get("content_type") or "text/html")
     verdict = compare_claim(claim, extract)
@@ -62,4 +67,4 @@ def run_check(url: str, claim: dict[str, Any], schema: dict[str, Any] | None = N
         result["diffs"] = list(result["diffs"]) + [
             {"path": "$schema", "claimed": schema, "found": None}
         ]
-    return _finalize(result)
+    return _finalize(result, bill_to)

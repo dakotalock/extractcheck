@@ -5,23 +5,31 @@ from typing import Any
 
 import httpx
 
-STRIPE_API = "https://api.stripe.com/v1/billing/meter_events"
+STRIPE_API = "https://api.stripe.com/v1"
 DEFAULT_EVENT = "extractcheck_check"
 
 
+def secret() -> str:
+    return os.environ.get("STRIPE_SECRET_KEY") or ""
+
+
 def configured() -> bool:
-    return bool(os.environ.get("STRIPE_SECRET_KEY") and os.environ.get("STRIPE_CUSTOMER_ID"))
+    return bool(secret())
 
 
 def meter_event_name() -> str:
     return os.environ.get("STRIPE_METER_EVENT") or DEFAULT_EVENT
 
 
-def report_usage(receipt_id: str, units: int = 1) -> dict[str, Any]:
+def price_id() -> str:
+    return os.environ.get("STRIPE_PRICE_ID") or ""
+
+
+def report_usage(receipt_id: str, customer_id: str | None = None, units: int = 1) -> dict[str, Any]:
     """Send a meter event. Never raises. Never returns the secret."""
-    secret = os.environ.get("STRIPE_SECRET_KEY")
-    customer = os.environ.get("STRIPE_CUSTOMER_ID")
-    if not secret or not customer:
+    key = secret()
+    customer = customer_id or os.environ.get("STRIPE_CUSTOMER_ID")
+    if not key or not customer:
         return {"stripe_reported": False, "stripe_error": "stripe not configured"}
     if units <= 0:
         return {"stripe_reported": False, "stripe_error": "no billable units"}
@@ -34,9 +42,9 @@ def report_usage(receipt_id: str, units: int = 1) -> dict[str, Any]:
     try:
         with httpx.Client(timeout=8.0) as client:
             resp = client.post(
-                STRIPE_API,
+                f"{STRIPE_API}/billing/meter_events",
                 data=data,
-                auth=(secret, ""),
+                auth=(key, ""),
                 headers={"Idempotency-Key": receipt_id},
             )
         if resp.status_code >= 400:
