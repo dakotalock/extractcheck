@@ -7,7 +7,7 @@ from extractcheck.billing import report_usage
 from extractcheck.compare import compare_claim, validate_schema
 from extractcheck.extract import extract_from_bytes
 from extractcheck.fetch import fetch_url, utc_now
-from extractcheck.receipts import new_id, sign, store
+from extractcheck.receipts import attach_signatures, new_id, store
 
 
 def _finalize(result: dict[str, Any], bill_to: str | None) -> dict[str, Any]:
@@ -15,7 +15,7 @@ def _finalize(result: dict[str, Any], bill_to: str | None) -> dict[str, Any]:
         result.update(report_usage(result["receipt_id"], customer_id=bill_to, units=1))
     else:
         result["stripe_reported"] = False
-    result["signature"] = sign(result)
+    attach_signatures(result)
     store(result)
     return result
 
